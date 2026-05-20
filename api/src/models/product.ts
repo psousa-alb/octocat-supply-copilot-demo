@@ -32,6 +32,12 @@
  *           type: number
  *           format: float
  *           description: Discount percentage (if applicable) expressed as a decimal (e.g., 0.25 for 25%)
+ *         quantity:
+ *           type: integer
+ *           description: Current quantity in inventory
+ *         reorder_threshold:
+ *           type: integer
+ *           description: Inventory level that triggers a low-stock alert
  */
 export interface Product {
     productId: number;
@@ -43,4 +49,7 @@ export interface Product {
     unit: string;
     imgName: string;
     discount?: number;
+    quantity?: number;
+    reorder_threshold?: number;
+    reorderThreshold?: number;
 }

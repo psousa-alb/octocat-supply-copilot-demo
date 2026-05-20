@@ -100,12 +100,31 @@
  */
 
 import express from 'express';
+import { EventEmitter } from 'events';
 import { Product } from '../models/product';
 import { products as seedProducts } from '../seedData';
 
 const router = express.Router();
 
 let products: Product[] = [...seedProducts];
+export const inventoryEvents = new EventEmitter();
+
+const getQuantity = (product: Product): number | undefined =>
+  typeof product.quantity === 'number' ? product.quantity : undefined;
+
+const getReorderThreshold = (product: Product): number | undefined => {
+  if (typeof product.reorder_threshold === 'number') {
+    return product.reorder_threshold;
+  }
+  if (typeof product.reorderThreshold === 'number') {
+    return product.reorderThreshold;
+  }
+  return undefined;
+};
+
+export const resetProducts = () => {
+  products = [...seedProducts];
+};
 
 // Create a new product
 router.post('/', (req, res) => {
@@ -133,7 +152,28 @@ router.get('/:id', (req, res) => {
 router.put('/:id', (req, res) => {
   const index = products.findIndex(p => p.productId === parseInt(req.params.id));
   if (index !== -1) {
-    products[index] = req.body;
+    const currentProduct = products[index];
+    const updatedProduct: Product = req.body;
+    const previousQuantity = getQuantity(currentProduct);
+    const updatedQuantity = getQuantity(updatedProduct);
+    const reorderThreshold = getReorderThreshold(updatedProduct) ?? getReorderThreshold(currentProduct);
+
+    products[index] = updatedProduct;
+
+    if (
+      typeof reorderThreshold === 'number' &&
+      typeof previousQuantity === 'number' &&
+      typeof updatedQuantity === 'number' &&
+      previousQuantity >= reorderThreshold &&
+      updatedQuantity < reorderThreshold
+    ) {
+      inventoryEvents.emit('low-stock-alert', {
+        productId: updatedProduct.productId,
+        quantity: updatedQuantity,
+        reorder_threshold: reorderThreshold
+      });
+    }
+
     res.json(products[index]);
   } else {
     res.status(404).send('Product not found');
