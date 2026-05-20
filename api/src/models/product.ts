@@ -51,5 +51,4 @@ export interface Product {
     discount?: number;
     quantity?: number;
     reorder_threshold?: number;
-    reorderThreshold?: number;
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import productRouter, { inventoryEvents, resetProducts } from './product';
+import router, { inventoryEvents, resetProducts } from './product';
 
 let app: express.Express;
 
@@ -9,7 +9,7 @@ describe('Product API', () => {
     beforeEach(() => {
         app = express();
         app.use(express.json());
-        app.use('/products', productRouter);
+        app.use('/products', router);
         resetProducts();
         inventoryEvents.removeAllListeners();
     });

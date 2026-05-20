@@ -116,9 +116,6 @@ const getReorderThreshold = (product: Product): number | undefined => {
   if (typeof product.reorder_threshold === 'number') {
     return product.reorder_threshold;
   }
-  if (typeof product.reorderThreshold === 'number') {
-    return product.reorderThreshold;
-  }
   return undefined;
 };
 
