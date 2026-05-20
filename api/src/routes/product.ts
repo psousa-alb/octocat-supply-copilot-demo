@@ -100,12 +100,40 @@
  */
 
 import express from 'express';
+import { EventEmitter } from 'events';
 import { Product } from '../models/product';
 import { products as seedProducts } from '../seedData';
 
 const router = express.Router();
 
 let products: Product[] = [...seedProducts];
+export const inventoryEvents = new EventEmitter();
+const requiredPutFields: Array<keyof Product> = [
+  'productId',
+  'supplierId',
+  'name',
+  'description',
+  'price',
+  'sku',
+  'unit',
+  'imgName',
+  'quantity',
+  'reorder_threshold'
+];
+
+const getQuantity = (product: Product): number | undefined =>
+  typeof product.quantity === 'number' ? product.quantity : undefined;
+
+const getReorderThreshold = (product: Product): number | undefined => {
+  if (typeof product.reorder_threshold === 'number') {
+    return product.reorder_threshold;
+  }
+  return undefined;
+};
+
+export const resetProducts = () => {
+  products = [...seedProducts];
+};
 
 // Create a new product
 router.post('/', (req, res) => {
@@ -131,9 +159,47 @@ router.get('/:id', (req, res) => {
 
 // Update a product by ID
 router.put('/:id', (req, res) => {
-  const index = products.findIndex(p => p.productId === parseInt(req.params.id));
+  const pathProductId = parseInt(req.params.id);
+  const index = products.findIndex(p => p.productId === pathProductId);
   if (index !== -1) {
-    products[index] = req.body;
+    const updatedProduct: Product = req.body;
+    const missingRequiredFields = requiredPutFields.filter((field) => updatedProduct[field] === undefined || updatedProduct[field] === null);
+
+    if (missingRequiredFields.length > 0) {
+      res.status(400).json({
+        message: `Missing required fields: ${missingRequiredFields.join(', ')}`
+      });
+      return;
+    }
+
+    if (updatedProduct.productId !== pathProductId) {
+      res.status(400).json({
+        message: 'productId in request body must match path id'
+      });
+      return;
+    }
+
+    const currentProduct = products[index];
+    const previousQuantity = getQuantity(currentProduct);
+    const updatedQuantity = getQuantity(updatedProduct);
+    const reorderThreshold = getReorderThreshold(updatedProduct) ?? getReorderThreshold(currentProduct);
+
+    products[index] = { ...updatedProduct, productId: pathProductId };
+
+    if (
+      typeof reorderThreshold === 'number' &&
+      typeof previousQuantity === 'number' &&
+      typeof updatedQuantity === 'number' &&
+      previousQuantity >= reorderThreshold &&
+      updatedQuantity < reorderThreshold
+    ) {
+      inventoryEvents.emit('low-stock-alert', {
+        productId: pathProductId,
+        quantity: updatedQuantity,
+        reorder_threshold: reorderThreshold
+      });
+    }
+
     res.json(products[index]);
   } else {
     res.status(404).send('Product not found');
