@@ -108,6 +108,18 @@ const router = express.Router();
 
 let products: Product[] = [...seedProducts];
 export const inventoryEvents = new EventEmitter();
+const requiredPutFields: Array<keyof Product> = [
+  'productId',
+  'supplierId',
+  'name',
+  'description',
+  'price',
+  'sku',
+  'unit',
+  'imgName',
+  'quantity',
+  'reorder_threshold'
+];
 
 const getQuantity = (product: Product): number | undefined =>
   typeof product.quantity === 'number' ? product.quantity : undefined;
@@ -147,15 +159,32 @@ router.get('/:id', (req, res) => {
 
 // Update a product by ID
 router.put('/:id', (req, res) => {
-  const index = products.findIndex(p => p.productId === parseInt(req.params.id));
+  const pathProductId = parseInt(req.params.id);
+  const index = products.findIndex(p => p.productId === pathProductId);
   if (index !== -1) {
-    const currentProduct = products[index];
     const updatedProduct: Product = req.body;
+    const missingRequiredFields = requiredPutFields.filter((field) => updatedProduct[field] === undefined || updatedProduct[field] === null);
+
+    if (missingRequiredFields.length > 0) {
+      res.status(400).json({
+        message: `Missing required fields: ${missingRequiredFields.join(', ')}`
+      });
+      return;
+    }
+
+    if (updatedProduct.productId !== pathProductId) {
+      res.status(400).json({
+        message: 'productId in request body must match path id'
+      });
+      return;
+    }
+
+    const currentProduct = products[index];
     const previousQuantity = getQuantity(currentProduct);
     const updatedQuantity = getQuantity(updatedProduct);
     const reorderThreshold = getReorderThreshold(updatedProduct) ?? getReorderThreshold(currentProduct);
 
-    products[index] = updatedProduct;
+    products[index] = { ...updatedProduct, productId: pathProductId };
 
     if (
       typeof reorderThreshold === 'number' &&
@@ -165,7 +194,7 @@ router.put('/:id', (req, res) => {
       updatedQuantity < reorderThreshold
     ) {
       inventoryEvents.emit('low-stock-alert', {
-        productId: updatedProduct.productId,
+        productId: pathProductId,
         quantity: updatedQuantity,
         reorder_threshold: reorderThreshold
       });
